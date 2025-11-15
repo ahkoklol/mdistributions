@@ -4,6 +4,7 @@ import com.ahkoklol.config.DBConfig
 import com.ahkoklol.config.AppConfig
 import doobie.hikari.HikariTransactor
 import doobie.util.transactor.Transactor
+import doobie.util.ExecutionContexts // <-- ADDED
 import zio.*
 import zio.interop.catz.*
 import org.postgresql.Driver

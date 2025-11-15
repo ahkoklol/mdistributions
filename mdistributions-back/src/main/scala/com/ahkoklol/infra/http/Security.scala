@@ -4,9 +4,10 @@ import com.ahkoklol.domain.errors.AppError
 import com.ahkoklol.infra.utils.JwtUtility
 import com.ahkoklol.utils.JsonCodecs.given // Import all JSON codecs
 import sttp.tapir.ztapir.*
+import sttp.tapir.ztapir.ZPublicEndpoint // <-- ADDED
 import sttp.tapir.server.ziohttp.ZioHttpInterpreter
 import sttp.tapir.json.zio.*
-import sttp.tapir.generic.auto.* // For AppError schema
+import sttp.tapir.generic.auto.given // <-- ADDED (for AppError schema)
 import zio.ZIO
 import java.util.UUID
 
@@ -26,7 +27,7 @@ object Security:
       }
 
   // A public endpoint (no security) that can fail with AppError
-  val publicEndpoint: ZPublicEndpoint[Unit, AppError, Unit, Any] =
+  val publicEndpoint: ZPublicEndpoint[Unit, AppError, Unit, Any] = // <-- Type was missing
     endpoint
       .errorOut(jsonBody[AppError])
 

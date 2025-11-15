@@ -7,17 +7,18 @@ import com.ahkoklol.infra.db.*
 import com.ahkoklol.infra.external.*
 import com.ahkoklol.infra.utils.JwtUtilityLive
 import sttp.tapir.server.ziohttp.{ZioHttpInterpreter, ZioHttpServerOptions}
-import zio.{Console, ExitCode, LogLevel, Scope, ZIO, ZIOAppArgs, ZIOAppDefault, ZLayer}
+import zio.{Console, ExitCode, LogLevel, Runtime, Scope, ZIO, ZIOAppArgs, ZIOAppDefault, ZLayer} // <-- Added Runtime
 import zio.http.{Response, Routes, Server}
 import zio.logging.LogFormat
 import zio.logging.backend.SLF4J
 
 object Main extends ZIOAppDefault:
 
+  // Corrected bootstrap layer
   override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] =
-    SLF4J.slf4j(LogLevel.Debug, LogFormat.default)
+    Runtime.removeDefaultLoggers ++ SLF4J.slf4j(LogLevel.Debug, LogFormat.default) // <-- CORRECTED
 
-  override def run: ZIO[Any & ZIOAppArgs & Scope, Any, Any] = // Fixed 'with' to '&'
+  override def run: ZIO[Any & ZIOAppArgs & Scope, Any, Any] =
     val serverOptions: ZioHttpServerOptions[Any] =
       ZioHttpServerOptions.customiseInterceptors
         .metricsInterceptor(Endpoints.prometheusMetrics.metricsInterceptor())
@@ -35,11 +36,10 @@ object Main extends ZIOAppDefault:
         _          <- Console.readLine
       yield ()
 
-    // Fix: Wrap the entire program in () before .provide
     serverProgram.provide(
       // Configuration
       AppConfig.live,
-      AppConfig.dbConfig, // Provide specific configs for layers that need them
+      AppConfig.dbConfig, 
       AppConfig.httpConfig,
       
       // Infrastructure Layers

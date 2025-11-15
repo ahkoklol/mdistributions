@@ -3,6 +3,8 @@ package com.ahkoklol.utils
 import com.ahkoklol.domain.errors.AppError
 import com.ahkoklol.domain.models.*
 import com.ahkoklol.infra.utils.JwtClaim
+import sttp.tapir.Schema
+import sttp.tapir.generic.auto.given // Import tapir's auto-derivation for Schema
 import zio.json.*
 
 import java.util.UUID
@@ -15,6 +17,7 @@ object JsonCodecs:
   object ErrorResponse:
     given encoder: JsonEncoder[ErrorResponse] = DeriveJsonEncoder.gen[ErrorResponse]
     given decoder: JsonDecoder[ErrorResponse] = DeriveJsonDecoder.gen[ErrorResponse]
+    given schema: Schema[ErrorResponse] = Schema.derived[ErrorResponse] // <-- ADDED
 
   given appErrorEncoder: JsonEncoder[AppError] = ErrorResponse.encoder.contramap {
     case AppError.UserNotFound(msg)      => ErrorResponse("UserNotFound", msg)
@@ -25,7 +28,9 @@ object JsonCodecs:
     case AppError.DatabaseError(msg)     => ErrorResponse("DatabaseError", msg)
     case AppError.UnknownError(msg)      => ErrorResponse("UnknownError", msg)
   }
-  // We don't typically need a decoder for AppError
+  
+  // This tells tapir to use the ErrorResponse schema when it sees AppError
+  given appErrorSchema: Schema[AppError] = Schema.derived[ErrorResponse].as[AppError] // <-- ADDED
 
   // UUID Codecs
   given uuidEncoder: JsonEncoder[UUID] = JsonEncoder.string.contramap(_.toString)

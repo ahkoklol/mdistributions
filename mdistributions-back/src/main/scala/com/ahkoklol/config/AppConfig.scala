@@ -3,7 +3,7 @@ package com.ahkoklol.config
 import zio.config.*
 import zio.config.magnolia.*
 import zio.config.typesafe.TypesafeConfigProvider
-import zio.ZLayer
+import zio.{Config, ZLayer} // Import zio.Config for the error type
 
 // Define component-specific configurations
 case class DBConfig(url: String, user: String, pass: String)
@@ -19,11 +19,11 @@ case class AppConfig(
 
 object AppConfig:
   // Derive the decoder for the AppConfig case class
-  private val configDescriptor: ConfigDescriptor[AppConfig] =
-    deriveConfig[AppConfig].nested("AppConfig") // Assumes config is under an "AppConfig" block
+  private val configDescriptor: Descriptor[AppConfig] = // <-- RENAMED
+    derive[AppConfig].nested("AppConfig") // <-- RENAMED (was deriveConfig)
 
   // Define the live ZLayer for providing the configuration
-  val live: ZLayer[Any, zio.Config.Error, AppConfig] =
+  val live: ZLayer[Any, Config.Error, AppConfig] = // <-- Use zio.Config.Error
     ZLayer.fromZIO(
       read(
         configDescriptor.from(

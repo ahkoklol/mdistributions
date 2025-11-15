@@ -5,7 +5,7 @@ import com.ahkoklol.domain.models.*
 import com.ahkoklol.domain.ports.UserRepository
 import com.ahkoklol.infra.utils.JwtUtility
 import zio.{IO, ZIO, ZLayer}
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder // <-- Import for hashing
 import java.util.UUID
 
 trait UserService:
@@ -45,7 +45,8 @@ case class UserServiceLive(repo: UserRepository, jwt: JwtUtility, encoder: BCryp
 
   def login(login: User.Login): IO[AppError, (User, String)] =
     for
-      (user, hashedPass) <- repo.findByEmail(login.email)
+      tuple             <- repo.findByEmail(login.email) // <-- Get tuple
+      (user, hashedPass) = tuple // <-- Destructure here
       isValid           <- ZIO.succeed(encoder.matches(login.password, hashedPass))
       _                 <- ZIO.unless(isValid)(ZIO.fail(AppError.InvalidCredentials()))
       token             <- jwt.encode(user.id)

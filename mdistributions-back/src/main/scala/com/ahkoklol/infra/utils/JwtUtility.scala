@@ -27,7 +27,7 @@ case class JwtUtilityLive(config: JwtConfig, clock: Clock) extends JwtUtility:
   private val algo = JwtAlgorithm.HS256
 
   def encode(userId: UUID): IO[AppError, String] =
-    ZIO.succeed {
+    ZIO.attempt { // <-- CHANGED from ZIO.succeed
       val claim = PdiJwtClaim(
         content = JwtClaim(userId).toJson,
         issuer = Some("mdistributions"),
@@ -39,7 +39,7 @@ case class JwtUtilityLive(config: JwtConfig, clock: Clock) extends JwtUtility:
 
   def validateToken(token: String): IO[AppError, JwtClaim] =
     (for
-      claimJson <- JwtZIOJson.decodeJson(token, config.secret, Seq(algo))
+      claimJson <- ZIO.fromTry(JwtZIOJson.decodeJson(token, config.secret, Seq(algo))) // <-- FIXED
       claim     <- ZIO.fromEither(claimJson.as[JwtClaim])
     yield claim).mapError(_ => AppError.Unauthorized("Invalid token"))
 

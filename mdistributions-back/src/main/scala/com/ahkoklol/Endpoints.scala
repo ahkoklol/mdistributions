@@ -5,12 +5,13 @@ import com.ahkoklol.infra.http.{EmailEndpoints, Security, UserEndpoints}
 import sttp.tapir.server.metrics.prometheus.PrometheusMetrics
 import sttp.tapir.swagger.bundle.SwaggerInterpreter
 import sttp.tapir.ztapir.ZServerEndpoint
+import sttp.tapir.ztapir.RichZServerEndpoint // <-- ADDED for .widen
 import zio.Task
 import zio.RIO
 
 object Endpoints:
   // Define the total environment needed for all API endpoints
-  type AppDependencies = UserEndpoints.UserEndpointsEnv & EmailEndpoints.EmailEndpointsEnv
+  type AppDependencies = UserEndpoints.UserEndpointsEnv | EmailEndpoints.EmailEndpointsEnv // <-- CHANGED to |
 
   // Combine API endpoints from all modules
   val apiEndpoints: List[ZServerEndpoint[AppDependencies, Any]] =

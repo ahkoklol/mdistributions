@@ -5,8 +5,9 @@ import com.ahkoklol.domain.services.UserService
 import com.ahkoklol.infra.http.Security.{publicEndpoint, securedEndpoint, SecurityDeps}
 import com.ahkoklol.utils.JsonCodecs.given // Import all JSON codecs
 import sttp.tapir.ztapir.*
+import sttp.tapir.ztapir.RichZServerEndpoint // <-- ADDED for .zServerLogic
 import sttp.tapir.json.zio.*
-import sttp.tapir.generic.auto.* // Import auto-derivation for schemas
+import sttp.tapir.generic.auto.given // Import auto-derivation for schemas
 import sttp.model.StatusCode
 import zio.ZIO
 
