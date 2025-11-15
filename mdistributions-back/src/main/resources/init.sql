@@ -2,7 +2,7 @@ CREATE TABLE users (
     id UUID PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    google_smtp_credential VARCHAR(512), -- Store sensitive data encrypted (e.g., Google OAuth token or key file path)
+    google_smtp_credential VARCHAR(512),
     google_sheets_link VARCHAR(2048),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

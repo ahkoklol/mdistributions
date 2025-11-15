@@ -2,6 +2,7 @@ package com.ahkoklol.config
 
 import zio.config.magnolia.deriveConfig
 import zio.config.typesafe.TypesafeConfigSource
+import zio.config.typesafe.fromResourcePath
 import zio.{Config, ZLayer}
 
 object AppConfig:
@@ -21,21 +22,18 @@ object AppConfig:
       expirationInHours: Int
   )
 
-  final case class Config(
+  final case class AppConfiguration(
       db: DBConfig,
       httpServer: HttpServerConfig,
       jwt: JwtConfig
   )
 
-  // Use ZIO Config to derive config from case classes
   given dbConfig: Config[DBConfig] = deriveConfig[DBConfig]
   given httpConfig: Config[HttpServerConfig] = deriveConfig[HttpServerConfig]
   given jwtConfig: Config[JwtConfig] = deriveConfig[JwtConfig]
-  given config: Config[Config] = deriveConfig[Config]
+  given appConfig: Config[AppConfiguration] = deriveConfig[AppConfiguration]
 
-  // Layer that loads configuration from an application.conf file
-  val live: ZLayer[Any, Config.Error, Config] = 
+  val live: ZLayer[Any, Config.Error, AppConfiguration] = 
     ZLayer.fromZIO(
-      TypesafeConfigSource.fromResourcePath
-        .load(Config.collectAll(dbConfig, httpConfig, jwtConfig))
+      fromResourcePath.load(appConfig)
     )
