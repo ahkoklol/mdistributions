@@ -22,27 +22,27 @@ object EmailEndpoints:
     .out(jsonBody[EmailDraft])
     .out(statusCode(StatusCode.Created))
 
-  val saveDraftServerEndpoint = saveDraftEndpoint.zServerLogic { userId => saveDraftData =>
-    EmailService.saveDraft(userId, saveDraftData)
-  }
+  val saveDraftServerEndpoint = saveDraftEndpoint.serverLogic { userId => saveDraftData =>
+  EmailService.saveDraft(userId, saveDraftData)
+}
 
   // GET /emails/drafts/{draftId}
   val getDraftEndpoint = securedEndpoint.get
     .in("emails" / "drafts" / path[UUID]("draftId"))
     .out(jsonBody[EmailDraft])
 
-  val getDraftServerEndpoint = getDraftEndpoint.zServerLogic { userId => draftId =>
-    EmailService.getDraft(userId, draftId)
-  }
+  val getDraftServerEndpoint = getDraftEndpoint.serverLogic { userId => draftId =>
+  EmailService.getDraft(userId, draftId)
+}
 
   // POST /emails/send/{draftId}
   val sendEmailEndpoint = securedEndpoint.post
     .in("emails" / "send" / path[UUID]("draftId"))
     .out(statusCode(StatusCode.Accepted))
 
-  val sendEmailServerEndpoint = sendEmailEndpoint.zServerLogic { userId => draftId =>
-    EmailService.sendEmail(userId, draftId)
-  }
+  val sendEmailServerEndpoint = sendEmailEndpoint.serverLogic { userId => draftId =>
+  EmailService.sendEmail(userId, draftId)
+}
 
   // Combine all email endpoints
   val all: List[ZServerEndpoint[EmailEndpointsEnv, Any]] = List(

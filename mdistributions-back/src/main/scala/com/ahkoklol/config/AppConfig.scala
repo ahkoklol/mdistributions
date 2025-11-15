@@ -1,16 +1,15 @@
 package com.ahkoklol.config
 
+import zio.*
 import zio.config.*
 import zio.config.magnolia.*
+import zio.config.magnolia.deriveConfig
 import zio.config.typesafe.TypesafeConfigProvider
-import zio.{Config, ZLayer} // Import zio.Config for the error type
 
-// Define component-specific configurations
 case class DBConfig(url: String, user: String, pass: String)
 case class HttpServerConfig(host: String, port: Int)
 case class JwtConfig(secret: String, expiration: Long)
 
-// Define the top-level application configuration
 case class AppConfig(
     db: DBConfig,
     http: HttpServerConfig,
@@ -18,28 +17,25 @@ case class AppConfig(
 )
 
 object AppConfig:
-  // Derive the decoder for the AppConfig case class
-  private val configDescriptor: Descriptor[AppConfig] = // <-- RENAMED
-    derive[AppConfig].nested("AppConfig") // <-- RENAMED (was deriveConfig)
 
-  // Define the live ZLayer for providing the configuration
-  val live: ZLayer[Any, Config.Error, AppConfig] = // <-- Use zio.Config.Error
+  // ZIO 2.x config descriptor
+  private val configDescriptor: Config[AppConfig] =
+    deriveConfig[AppConfig].nested("AppConfig")
+
+  val live: ZLayer[Any, Config.Error, AppConfig] =
     ZLayer.fromZIO(
-      read(
-        configDescriptor.from(
-          TypesafeConfigProvider.fromResourcePath()
-        )
-      )
+      TypesafeConfigProvider
+        .fromResourcePath()
+        .load(configDescriptor)
     )
 
-  // Provide helper layers to access nested config parts
   val dbConfig: ZLayer[AppConfig, Nothing, DBConfig] =
-    ZLayer.service[AppConfig].project(_.db)
+    ZLayer.fromFunction((c: AppConfig) => c.db)
 
   val httpConfig: ZLayer[AppConfig, Nothing, HttpServerConfig] =
-    ZLayer.service[AppConfig].project(_.http)
+    ZLayer.fromFunction((c: AppConfig) => c.http)
 
   val jwtConfig: ZLayer[AppConfig, Nothing, JwtConfig] =
-    ZLayer.service[AppConfig].project(_.jwt)
-    
+    ZLayer.fromFunction((c: AppConfig) => c.jwt)
+
 end AppConfig
