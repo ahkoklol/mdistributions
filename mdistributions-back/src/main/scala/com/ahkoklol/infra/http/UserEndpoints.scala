@@ -21,9 +21,9 @@ object UserEndpoints:
     .out(jsonBody[User])
     .out(statusCode(StatusCode.Created))
 
-  val registerServerEndpoint = registerEndpoint.zServerLogic { registerData =>
-    UserService.register(registerData)
-  }
+  val registerServerEndpoint = registerEndpoint.serverLogic { registerData =>
+  UserService.register(registerData)
+}
 
   // POST /users/login
   val loginEndpoint = publicEndpoint.post
@@ -31,18 +31,18 @@ object UserEndpoints:
     .in(jsonBody[User.Login])
     .out(jsonBody[(User, String)]) // (User, Token)
 
-  val loginServerEndpoint = loginEndpoint.zServerLogic { loginData =>
-    UserService.login(loginData)
-  }
+  val loginServerEndpoint = loginEndpoint.serverLogic { loginData =>
+  UserService.login(loginData)
+}
 
   // GET /user/me
   val getMeEndpoint = securedEndpoint.get
     .in("user" / "me")
     .out(jsonBody[User])
 
-  val getMeServerEndpoint = getMeEndpoint.zServerLogic { userId => _ => // (userId, Unit)
-    UserService.findById(userId)
-  }
+  val getMeServerEndpoint = getMeEndpoint.serverLogic { userId => _ =>
+  UserService.findById(userId)
+}
 
   // PUT /user/me
   val updateMeEndpoint = securedEndpoint.put
@@ -50,18 +50,18 @@ object UserEndpoints:
     .in(jsonBody[User.Update])
     .out(statusCode(StatusCode.NoContent))
 
-  val updateMeServerEndpoint = updateMeEndpoint.zServerLogic { userId => updateData => // (userId, Update)
-    UserService.update(userId, updateData)
-  }
+  val updateMeServerEndpoint = updateMeEndpoint.serverLogic { userId => updateData =>
+  UserService.update(userId, updateData)
+}
 
   // DELETE /user/me
   val deleteMeEndpoint = securedEndpoint.delete
     .in("user" / "me")
     .out(statusCode(StatusCode.NoContent))
 
-  val deleteMeServerEndpoint = deleteMeEndpoint.zServerLogic { userId => _ => // (userId, Unit)
-    UserService.delete(userId)
-  }
+  val deleteMeServerEndpoint = deleteMeEndpoint.serverLogic { userId => _ =>
+  UserService.delete(userId)
+}
 
   // Combine all user endpoints
   val all: List[ZServerEndpoint[UserEndpointsEnv, Any]] = List(
