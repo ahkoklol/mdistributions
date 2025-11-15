@@ -3,13 +3,13 @@ package com.ahkoklol.infra.http
 import com.ahkoklol.domain.models.*
 import com.ahkoklol.domain.services.UserService
 import com.ahkoklol.infra.http.Security.{publicEndpoint, securedEndpoint, SecurityDeps}
-import com.ahkoklol.utils.JsonCodecs.given // Import all JSON codecs
+import com.ahkoklol.utils.JsonCodecs.given
 import sttp.tapir.ztapir.*
-import sttp.tapir.ztapir.RichZServerEndpoint // <-- ADDED for .zServerLogic
 import sttp.tapir.json.zio.*
-import sttp.tapir.generic.auto.given // Import auto-derivation for schemas
+import sttp.tapir.generic.auto.given
 import sttp.model.StatusCode
 import zio.ZIO
+import sttp.tapir.server.ziohttp.ZioHttpInterpreter._
 
 object UserEndpoints:
   type UserEndpointsEnv = UserService & SecurityDeps
@@ -21,9 +21,10 @@ object UserEndpoints:
     .out(jsonBody[User])
     .out(statusCode(StatusCode.Created))
 
-  val registerServerEndpoint = registerEndpoint.serverLogic { registerData =>
-  UserService.register(registerData)
-}
+  val registerServerEndpoint: ZServerEndpoint[UserEndpointsEnv, Any] =
+    registerEndpoint.zServerLogic { registerData =>
+      ZIO.serviceWithZIO[UserService](_.register(registerData)).either
+    }
 
   // POST /users/login
   val loginEndpoint = publicEndpoint.post
@@ -31,18 +32,20 @@ object UserEndpoints:
     .in(jsonBody[User.Login])
     .out(jsonBody[(User, String)]) // (User, Token)
 
-  val loginServerEndpoint = loginEndpoint.serverLogic { loginData =>
-  UserService.login(loginData)
-}
+  val loginServerEndpoint: ZServerEndpoint[UserEndpointsEnv, Any] =
+    loginEndpoint.zServerLogic { loginData =>
+      ZIO.serviceWithZIO[UserService](_.login(loginData)).either
+    }
 
   // GET /user/me
   val getMeEndpoint = securedEndpoint.get
     .in("user" / "me")
     .out(jsonBody[User])
 
-  val getMeServerEndpoint = getMeEndpoint.serverLogic { userId => _ =>
-  UserService.findById(userId)
-}
+  val getMeServerEndpoint: ZServerEndpoint[UserEndpointsEnv, Any] =
+    getMeEndpoint.serverLogic { userId => _ =>
+      ZIO.serviceWithZIO[UserService](_.findById(userId))
+    }
 
   // PUT /user/me
   val updateMeEndpoint = securedEndpoint.put
@@ -50,18 +53,20 @@ object UserEndpoints:
     .in(jsonBody[User.Update])
     .out(statusCode(StatusCode.NoContent))
 
-  val updateMeServerEndpoint = updateMeEndpoint.serverLogic { userId => updateData =>
-  UserService.update(userId, updateData)
-}
+  val updateMeServerEndpoint: ZServerEndpoint[UserEndpointsEnv, Any] =
+    updateMeEndpoint.serverLogic { userId => updateData =>
+      ZIO.serviceWithZIO[UserService](_.update(userId, updateData))
+    }
 
   // DELETE /user/me
   val deleteMeEndpoint = securedEndpoint.delete
     .in("user" / "me")
     .out(statusCode(StatusCode.NoContent))
 
-  val deleteMeServerEndpoint = deleteMeEndpoint.serverLogic { userId => _ =>
-  UserService.delete(userId)
-}
+  val deleteMeServerEndpoint: ZServerEndpoint[UserEndpointsEnv, Any] =
+    deleteMeEndpoint.serverLogic { userId => _ =>
+      ZIO.serviceWithZIO[UserService](_.delete(userId))
+    }
 
   // Combine all user endpoints
   val all: List[ZServerEndpoint[UserEndpointsEnv, Any]] = List(

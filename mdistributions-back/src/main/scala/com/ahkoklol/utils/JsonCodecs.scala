@@ -28,6 +28,8 @@ object JsonCodecs:
     case AppError.DatabaseError(msg)     => ErrorResponse("DatabaseError", msg)
     case AppError.UnknownError(msg)      => ErrorResponse("UnknownError", msg)
   }
+
+    given appErrorDecoder: JsonDecoder[AppError] = DeriveJsonDecoder.gen[AppError]
   
   // This tells tapir to use the ErrorResponse schema when it sees AppError
   given appErrorSchema: Schema[AppError] = Schema.derived[ErrorResponse].as[AppError] // <-- ADDED
