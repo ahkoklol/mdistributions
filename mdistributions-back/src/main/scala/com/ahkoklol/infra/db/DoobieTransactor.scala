@@ -1,27 +1,23 @@
-package com.ahkoklol.infrastructure.db
+package com.ahkoklol.infra.db
 
-import com.ahkoklol.config.AppConfig.DBConfig // Assuming DBConfig is defined here
+import com.ahkoklol.config.DBConfig
+import com.ahkoklol.config.AppConfig
 import doobie.hikari.HikariTransactor
-import doobie.util.ExecutionContexts
+import doobie.util.transactor.Transactor
+import zio.*
 import zio.interop.catz.*
-import zio.{Task, ZIO, ZLayer}
+import org.postgresql.Driver
 
 object DoobieTransactor:
-  type Transactor = HikariTransactor[Task]
-
-  // Layer to create the Hikari connection pool and transactor
-  val live: ZLayer[DBConfig, Throwable, Transactor] = 
+  val live: ZLayer[AppConfig, Throwable, Transactor[Task]] =
     ZLayer.scoped {
-      for {
-        dbConfig <- ZIO.service[DBConfig]
-        // Necessary for Doobie to use ZIO's concurrency model
-        ce <- ExecutionContexts.fixedThreadPool[Task](32).toScopedZIO
-        xa <- HikariTransactor.newHikariTransactor[Task](
-                driverClassName = "org.postgresql.Driver",
-                url = dbConfig.url,
-                user = dbConfig.user,
-                pass = dbConfig.password,
-                ce
-              ).toScopedZIO
-      } yield xa
+      ZIO.service[AppConfig].flatMap { config =>
+        HikariTransactor.newHikariTransactor[Task](
+          classOf[Driver].getName,
+          config.db.url,
+          config.db.user,
+          config.db.pass,
+          ExecutionContexts.fixedThreadPool[Task](32)
+        ).toScopedZIO
+      }
     }

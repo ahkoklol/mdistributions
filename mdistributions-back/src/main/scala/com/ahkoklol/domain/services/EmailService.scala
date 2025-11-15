@@ -1,78 +1,48 @@
 package com.ahkoklol.domain.services
 
-import com.ahkoklol.domain.models.EmailDraft.{Save}
-import com.ahkoklol.domain.models.EmailDraft
-import com.ahkoklol.domain.models.User
-import com.ahkoklol.domain.ports.{EmailRepository, GoogleSheetsClient, GoogleSmtpClient}
 import com.ahkoklol.domain.errors.AppError
-import com.ahkoklol.domain.errors.AppError.{DraftNotFoundError, EmailSendError, SheetsLinkFetchError, UserNotFoundError}
-import zio.{IO, Task, ZIO, ZLayer}
-
+import com.ahkoklol.domain.models.{EmailDraft, User}
+import com.ahkoklol.domain.ports.{EmailRepository, GoogleSheetsClient, GoogleSmtpClient, UserRepository}
+import zio.{IO, ZIO, ZLayer}
 import java.util.UUID
 
-// Assuming these ports exist as ZIO services in the environment
-trait EmailRepository:
-  def save(draft: EmailDraft): IO[AppError, EmailDraft]
-  def findByIdAndUser(id: UUID, userId: UUID): IO[AppError, Option[EmailDraft]]
-
-trait GoogleSheetsClient:
-  // Fetches a list of recipient emails from a given sheet URL and returns them
-  def getRecipients(sheetsUrl: String): IO[AppError, List[String]]
-
-trait GoogleSmtpClient:
-  // Sends an email to a list of recipients using the user's credentials
-  def send(recipient: String, subject: String, body: String, user: User): IO[AppError, Unit]
-
-
 trait EmailService:
-  /** Saves a new email draft or updates an existing one for the given user. */
-  def saveDraft(userId: UUID, data: Save): IO[AppError, EmailDraft]
-
-  /** Retrieves an email draft by ID for the given user. */
-  def getDraft(id: UUID, userId: UUID): IO[AppError, EmailDraft]
-  
-  /** Fetches recipients, then iterates and sends the email to all of them. */
-  def sendEmail(draftId: UUID, user: User): IO[AppError, Unit]
-
+  def saveDraft(userId: UUID, draft: EmailDraft.Save): IO[AppError, EmailDraft]
+  def getDraft(userId: UUID, draftId: UUID): IO[AppError, EmailDraft]
+  def sendEmail(userId: UUID, draftId: UUID): IO[AppError, Unit]
 
 object EmailService:
-  val live = ZLayer.fromFunction { (
-    repo: EmailRepository, 
-    sheetsClient: GoogleSheetsClient, 
+  def saveDraft(userId: UUID, draft: EmailDraft.Save): ZIO[EmailService, AppError, EmailDraft] =
+    ZIO.serviceWithZIO[EmailService](_.saveDraft(userId, draft))
+  
+  def getDraft(userId: UUID, draftId: UUID): ZIO[EmailService, AppError, EmailDraft] =
+    ZIO.serviceWithZIO[EmailService](_.getDraft(userId, draftId))
+
+  def sendEmail(userId: UUID, draftId: UUID): ZIO[EmailService, AppError, Unit] =
+    ZIO.serviceWithZIO[EmailService](_.sendEmail(userId, draftId))
+
+case class EmailServiceLive(
+    userRepo: UserRepository,
+    emailRepo: EmailRepository,
+    sheetsClient: GoogleSheetsClient,
     smtpClient: GoogleSmtpClient
-  ) =>
-    new EmailService {
-      
-      override def saveDraft(userId: UUID, data: Save): IO[AppError, EmailDraft] =
-        val newDraft = EmailDraft(
-          id = UUID.randomUUID(),
-          userId = userId,
-          googleSheetsLink = data.googleSheetsLink,
-          subject = data.subject,
-          body = data.body
-        )
-        repo.save(newDraft)
+) extends EmailService:
 
-      override def getDraft(id: UUID, userId: UUID): IO[AppError, EmailDraft] =
-        repo
-          .findByIdAndUser(id, userId)
-          .flatMap(ZIO.fromOption(_).orElseFail(DraftNotFoundError(id)))
+  def saveDraft(userId: UUID, draft: EmailDraft.Save): IO[AppError, EmailDraft] =
+    emailRepo.saveDraft(userId, draft)
 
-      override def sendEmail(draftId: UUID, user: User): IO[AppError, Unit] =
-        for {
-          // 1. Retrieve the email draft
-          draft <- getDraft(draftId, user.id)
-          
-          // 2. Fetch all recipient emails from Google Sheets
-          recipients <- sheetsClient.getRecipients(draft.googleSheetsLink)
-          
-          // 3. Send email to each recipient
-          _ <- ZIO.foreachParDiscard(recipients) { recipient =>
-            smtpClient.send(recipient, draft.subject, draft.body, user).tapError { err =>
-              // Log the error but continue trying other recipients
-              ZIO.logError(s"Failed to send email to $recipient for draft $draftId: ${err.getMessage}")
-            }.orElseFail(EmailSendError(s"Failed to send one or more emails. Check logs."))
-          }
-        } yield ()
-    }
-  }
+  def getDraft(userId: UUID, draftId: UUID): IO[AppError, EmailDraft] =
+    emailRepo.getDraft(userId, draftId)
+
+  def sendEmail(userId: UUID, draftId: UUID): IO[AppError, Unit] =
+    for
+      user     <- userRepo.findById(userId)
+      draft    <- emailRepo.getDraft(userId, draftId)
+      sheetsLink <- ZIO.fromOption(user.googleSheetsLink).mapError(_ => AppError.UnknownError("User has no Google Sheets link"))
+      emails   <- sheetsClient.getEmails(sheetsLink)
+      _        <- ZIO.foreachPar(emails)(email => smtpClient.sendEmail(email, draft.subject, draft.body))
+    yield ()
+
+object EmailServiceLive:
+  val layer: ZLayer[UserRepository & EmailRepository & GoogleSheetsClient & GoogleSmtpClient, Nothing, EmailService] =
+    ZLayer.fromFunction(EmailServiceLive.apply)

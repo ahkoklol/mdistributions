@@ -1,39 +1,45 @@
 package com.ahkoklol.config
 
-import zio.config.magnolia.deriveConfig
-import zio.config.typesafe.TypesafeConfigSource
-import zio.config.typesafe.fromResourcePath
-import zio.{Config, ZLayer}
+import zio.config.*
+import zio.config.magnolia.*
+import zio.config.typesafe.TypesafeConfigProvider
+import zio.ZLayer
+
+// Define component-specific configurations
+case class DBConfig(url: String, user: String, pass: String)
+case class HttpServerConfig(host: String, port: Int)
+case class JwtConfig(secret: String, expiration: Long)
+
+// Define the top-level application configuration
+case class AppConfig(
+    db: DBConfig,
+    http: HttpServerConfig,
+    jwt: JwtConfig
+)
 
 object AppConfig:
+  // Derive the decoder for the AppConfig case class
+  private val configDescriptor: ConfigDescriptor[AppConfig] =
+    deriveConfig[AppConfig].nested("AppConfig") // Assumes config is under an "AppConfig" block
 
-  final case class DBConfig(
-      url: String,
-      user: String,
-      password: String
-  )
-
-  final case class HttpServerConfig(
-      port: Int
-  )
-
-  final case class JwtConfig(
-      secret: String,
-      expirationInHours: Int
-  )
-
-  final case class AppConfiguration(
-      db: DBConfig,
-      httpServer: HttpServerConfig,
-      jwt: JwtConfig
-  )
-
-  given dbConfig: Config[DBConfig] = deriveConfig[DBConfig]
-  given httpConfig: Config[HttpServerConfig] = deriveConfig[HttpServerConfig]
-  given jwtConfig: Config[JwtConfig] = deriveConfig[JwtConfig]
-  given appConfig: Config[AppConfiguration] = deriveConfig[AppConfiguration]
-
-  val live: ZLayer[Any, Config.Error, AppConfiguration] = 
+  // Define the live ZLayer for providing the configuration
+  val live: ZLayer[Any, zio.Config.Error, AppConfig] =
     ZLayer.fromZIO(
-      fromResourcePath.load(appConfig)
+      read(
+        configDescriptor.from(
+          TypesafeConfigProvider.fromResourcePath()
+        )
+      )
     )
+
+  // Provide helper layers to access nested config parts
+  val dbConfig: ZLayer[AppConfig, Nothing, DBConfig] =
+    ZLayer.service[AppConfig].project(_.db)
+
+  val httpConfig: ZLayer[AppConfig, Nothing, HttpServerConfig] =
+    ZLayer.service[AppConfig].project(_.http)
+
+  val jwtConfig: ZLayer[AppConfig, Nothing, JwtConfig] =
+    ZLayer.service[AppConfig].project(_.jwt)
+    
+end AppConfig

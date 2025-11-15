@@ -1,44 +1,49 @@
-package com.ahkoklol.infrastructure.utils
+package com.ahkoklol.infra.utils
 
-import com.ahkoklol.config.AppConfig.JwtConfig
+import com.ahkoklol.config.{AppConfig, JwtConfig}
 import com.ahkoklol.domain.errors.AppError
-import com.ahkoklol.domain.errors.AppError.AuthenticationError
-import zio.{IO, ZIO, ZLayer}
-import pdi.jwt.{JwtAlgorithm, JwtZIOJson}
+import pdi.jwt.{JwtAlgorithm, JwtClaim as PdiJwtClaim, JwtZIOJson}
+import zio.*
 import zio.json.*
-
 import java.time.Clock
 import java.util.UUID
 
+case class JwtClaim(userId: UUID)
+
 trait JwtUtility:
-  /** Issues a new JWT for a given user ID. */
-  def issueToken(userId: UUID): IO[AppError, String]
-  
-  /** Validates and decodes a JWT, returning the user ID. */
-  def validateToken(token: String): IO[AppError, UUID]
+  def encode(userId: UUID): IO[AppError, String]
+  def validateToken(token: String): IO[AppError, JwtClaim]
 
 object JwtUtility:
-  val live: ZLayer[JwtConfig, Nothing, JwtUtility] = ZLayer.fromFunction { (config: JwtConfig) =>
-    new JwtUtility:
-      // Required by pdi.jwt for expiration claims
-      private implicit val clock: Clock = Clock.systemUTC()
-      private val algo = JwtAlgorithm.HS256
-      private val secret = config.secret
-      private val expiration = config.expirationInHours * 3600 // hours to seconds
+  def encode(userId: UUID): ZIO[JwtUtility, AppError, String] =
+    ZIO.serviceWithZIO[JwtUtility](_.encode(userId))
 
-      override def issueToken(userId: UUID): IO[AppError, String] =
-        ZIO.succeed {
-          val claims = s"""{"userId": "${userId.toString}"}""".fromJson[Json]
-          JwtZIOJson.encode(claims.getOrElse(Json.Null), secret, algo)
-        }
+  def validateToken(token: String): ZIO[JwtUtility, AppError, JwtClaim] =
+    ZIO.serviceWithZIO[JwtUtility](_.validateToken(token))
 
-      override def validateToken(token: String): IO[AppError, UUID] =
-        JwtZIOJson.decode(token, secret, Seq(algo))
-          .mapError(e => AuthenticationError(s"Invalid token: ${e.getMessage}"))
-          .flatMap { claims =>
-            claims.content.fromJson[Map[String, String]] match
-              case Right(map) if map.contains("userId") => ZIO.attempt(UUID.fromString(map("userId")))
-              case _ => ZIO.fail(AuthenticationError("Invalid token claims format."))
-          }
-          .mapError(e => e.fold(_ => e, identity))
-  }
+case class JwtUtilityLive(config: JwtConfig, clock: Clock) extends JwtUtility:
+  import com.ahkoklol.utils.JsonCodecs.given // Import codecs
+
+  private val algo = JwtAlgorithm.HS256
+
+  def encode(userId: UUID): IO[AppError, String] =
+    ZIO.succeed {
+      val claim = PdiJwtClaim(
+        content = JwtClaim(userId).toJson,
+        issuer = Some("mdistributions"),
+        issuedAt = Some(clock.instant().getEpochSecond),
+        expiration = Some(clock.instant().getEpochSecond + config.expiration)
+      )
+      JwtZIOJson.encode(claim, config.secret, algo)
+    }.mapError(t => AppError.UnknownError(s"Failed to encode JWT: ${t.getMessage}"))
+
+  def validateToken(token: String): IO[AppError, JwtClaim] =
+    (for
+      claimJson <- JwtZIOJson.decodeJson(token, config.secret, Seq(algo))
+      claim     <- ZIO.fromEither(claimJson.as[JwtClaim])
+    yield claim).mapError(_ => AppError.Unauthorized("Invalid token"))
+
+object JwtUtilityLive:
+  val layer: ZLayer[AppConfig, Nothing, JwtUtility] =
+    ZLayer.succeed(Clock.systemUTC()) ++ AppConfig.jwtConfig >>>
+      ZLayer.fromFunction(JwtUtilityLive.apply)

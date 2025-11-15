@@ -1,58 +1,53 @@
-package com.ahkoklol.infrastructure.http
+package com.ahkoklol.infra.http
 
-import com.ahkoklol.domain.errors.AppError
-import com.ahkoklol.domain.models.EmailDraft
-import com.ahkoklol.domain.models.EmailDraft.Save
-import com.ahkoklol.domain.services.{EmailService, UserService}
-import com.ahkoklol.infrastructure.http.Security.{SecuredEndpoint, SecurityDeps}
-import com.ahkoklol.utils.JsonCodecs.{given, *}
-import sttp.tapir.*
-import sttp.tapir.json.zio.jsonBody
-import sttp.tapir.generic.auto.* // FIX: Schema derivation import
-import sttp.tapir.ztapir.ZServerEndpoint
+import com.ahkoklol.domain.models.*
+import com.ahkoklol.domain.services.EmailService
+import com.ahkoklol.infra.http.Security.{securedEndpoint, SecurityDeps}
+import com.ahkoklol.utils.JsonCodecs.given // Import all JSON codecs
+import sttp.tapir.ztapir.*
+import sttp.tapir.json.zio.*
+import sttp.tapir.generic.auto.* // Import auto-derivation for schemas
+import sttp.model.StatusCode
 import zio.ZIO
-
 import java.util.UUID
 
 object EmailEndpoints:
+  type EmailEndpointsEnv = EmailService & SecurityDeps
 
-  // 1. POST /emails/draft
-  val saveDraftEndpoint: SecuredEndpoint[Save, EmailDraft] = Security.secureEndpoint.post
-    .in("emails" / "draft")
-    .in(jsonBody[Save].description("Email subject, body, and sheets link"))
-    .out(jsonBody[EmailDraft].description("The saved draft"))
+  // POST /emails/drafts
+  val saveDraftEndpoint = securedEndpoint.post
+    .in("emails" / "drafts")
+    .in(jsonBody[EmailDraft.Save])
+    .out(jsonBody[EmailDraft])
+    .out(statusCode(StatusCode.Created))
 
-  val saveDraftServerEndpoint: ZServerEndpoint[EmailService & SecurityDeps, Save, AppError, EmailDraft, Any] = saveDraftEndpoint.serverLogic { userId => saveDraftData =>
-    ZIO.serviceWithZIO[EmailService](_.saveDraft(userId, saveDraftData)).map(Right(_)) // FIX: Returns Right(Output)
+  val saveDraftServerEndpoint = saveDraftEndpoint.zServerLogic { userId => saveDraftData =>
+    EmailService.saveDraft(userId, saveDraftData)
   }
 
-  // 2. GET /emails/draft/{id}
-  val getDraftEndpoint: SecuredEndpoint[UUID, EmailDraft] = Security.secureEndpoint.get
-    .in("emails" / "draft" / path[UUID]("draftId"))
-    .out(jsonBody[EmailDraft].description("The requested draft"))
+  // GET /emails/drafts/{draftId}
+  val getDraftEndpoint = securedEndpoint.get
+    .in("emails" / "drafts" / path[UUID]("draftId"))
+    .out(jsonBody[EmailDraft])
 
-  val getDraftServerEndpoint: ZServerEndpoint[EmailService & SecurityDeps, UUID, AppError, EmailDraft, Any] = getDraftEndpoint.serverLogic { userId => draftId =>
-    ZIO.serviceWithZIO[EmailService](_.getDraft(draftId, userId)).map(Right(_)) // FIX: Returns Right(Output)
+  val getDraftServerEndpoint = getDraftEndpoint.zServerLogic { userId => draftId =>
+    EmailService.getDraft(userId, draftId)
   }
 
-  // 3. POST /emails/send/{id}
-  val sendEmailEndpoint: SecuredEndpoint[UUID, Unit] = Security.secureEndpoint.post
+  // POST /emails/send/{draftId}
+  val sendEmailEndpoint = securedEndpoint.post
     .in("emails" / "send" / path[UUID]("draftId"))
-    .out(statusCode(sttp.model.StatusCode.Accepted))
+    .out(statusCode(StatusCode.Accepted))
 
-  // FIX: Reduced ZServerEndpoint arguments to the standard [R, C] format
-  val sendEmailServerEndpoint: ZServerEndpoint[EmailService & UserService & SecurityDeps, UUID, AppError, Unit, Any] =
-    sendEmailEndpoint.serverLogic { userId => draftId =>
-      for {
-        userService <- ZIO.service[UserService]
-        emailService <- ZIO.service[EmailService]
-        user <- userService.getUser(userId)
-        _ <- emailService.sendEmail(draftId, user)
-      } yield Right(()) // FIX: Returns Right(Output)
-    }
+  val sendEmailServerEndpoint = sendEmailEndpoint.zServerLogic { userId => draftId =>
+    EmailService.sendEmail(userId, draftId)
+  }
 
-  val all: List[ZServerEndpoint[EmailService & UserService & SecurityDeps, Any]] = List(
+  // Combine all email endpoints
+  val all: List[ZServerEndpoint[EmailEndpointsEnv, Any]] = List(
     saveDraftServerEndpoint,
     getDraftServerEndpoint,
     sendEmailServerEndpoint
   )
+
+end EmailEndpoints

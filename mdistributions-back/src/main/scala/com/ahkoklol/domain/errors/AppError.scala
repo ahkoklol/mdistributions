@@ -1,15 +1,17 @@
 package com.ahkoklol.domain.errors
 
-sealed trait AppError extends Throwable
+// Sealed trait for all application-specific errors
+enum AppError(val message: String):
+  case UserNotFound(msg: String = "User not found") extends AppError(msg)
+  case EmailDraftNotFound(msg: String = "Email draft not found") extends AppError(msg)
+  case Unauthorized(msg: String = "Unauthorized") extends AppError(msg)
+  case EmailAlreadyExists(msg: String = "Email already exists") extends AppError(msg)
+  case InvalidCredentials(msg: String = "Invalid email or password") extends AppError(msg)
+  case DatabaseError(msg: String = "A database error occurred") extends AppError(msg)
+  case UnknownError(msg: String = "An unknown error occurred") extends AppError(msg)
 
 object AppError:
-  // User Errors
-  final case class UserAlreadyExists(email: String) extends AppError
-  final case class UserNotFoundError(id: java.util.UUID) extends AppError
-  final case class AuthenticationError(message: String) extends AppError
-  final case class InvalidUpdateData(message: String) extends AppError
-  
-  // Email Errors
-  final case class DraftNotFoundError(id: java.util.UUID) extends AppError
-  final case class SheetsLinkFetchError(message: String) extends AppError
-  final case class EmailSendError(message: String) extends AppError
+  // Helper to convert Throwables to AppError
+  def fromThrowable(t: Throwable): AppError = t match
+    case e: AppError => e
+    case _           => DatabaseError(t.getMessage)

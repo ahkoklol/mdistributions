@@ -1,65 +1,60 @@
 package com.ahkoklol
 
 import com.ahkoklol.config.AppConfig
-import com.ahkoklol.infrastructure.db.{DoobieTransactor, PostgresEmailRepository, PostgresUserRepository}
-import com.ahkoklol.infrastructure.external.{GoogleSheetsClientLive, GoogleSmtpClientLive}
-import com.ahkoklol.infrastructure.utils.{BcryptHashUtility, JwtUtility}
-import com.ahkoklol.domain.services.{EmailService, UserService}
+import com.ahkoklol.domain.ports.*
+import com.ahkoklol.domain.services.*
+import com.ahkoklol.infra.db.*
+import com.ahkoklol.infra.external.*
+import com.ahkoklol.infra.utils.JwtUtilityLive
 import sttp.tapir.server.ziohttp.{ZioHttpInterpreter, ZioHttpServerOptions}
-import zio.{Console, LogLevel, Scope, ZIO, ZIOAppArgs, ZIOAppDefault, ZLayer}
+import zio.{Console, ExitCode, LogLevel, Scope, ZIO, ZIOAppArgs, ZIOAppDefault, ZLayer}
 import zio.http.{Response, Routes, Server}
 import zio.logging.LogFormat
 import zio.logging.backend.SLF4J
 
 object Main extends ZIOAppDefault:
 
-  // Layer composition for the entire application
-  private val InfrastructureLayer =
-    // 1. Utilities and Configuration
-    AppConfig.live >+> BcryptHashUtility.live >+> JwtUtility.live
-
-  private val DbLayer =
-    InfrastructureLayer >>> AppConfig.live.select(_.db) >>> DoobieTransactor.live
-
-  private val RepositoryLayer =
-    DbLayer >>> (PostgresUserRepository.live ++ PostgresEmailRepository.live)
-
-  private val ExternalClientLayer =
-    GoogleSheetsClientLive.live ++ GoogleSmtpClientLive.live
-
-  private val DomainServiceLayer =
-    (RepositoryLayer ++ InfrastructureLayer) >>> UserService.live ++
-    (RepositoryLayer ++ ExternalClientLayer) >>> EmailService.live
-
-  // The final layer providing all dependencies required by the endpoints
-  private val AppDependencies =
-    DomainServiceLayer ++ JwtUtility.live
-
-  // Overriding bootstrap to use configuration and SLF4J logging
-  override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] = 
+  override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] =
     SLF4J.slf4j(LogLevel.Debug, LogFormat.default)
 
-  override def run: ZIO[Any with ZIOAppArgs with Scope, Any, Any] =
+  override def run: ZIO[Any & ZIOAppArgs & Scope, Any, Any] = // Fixed 'with' to '&'
     val serverOptions: ZioHttpServerOptions[Any] =
       ZioHttpServerOptions.customiseInterceptors
         .metricsInterceptor(Endpoints.prometheusMetrics.metricsInterceptor())
         .options
 
-    // Create the ZIO HTTP app from all Tapir server endpoints
-    val app: Routes[Endpoints.ApiDependencies, Response] = ZioHttpInterpreter(serverOptions).toHttp(Endpoints.all)
+    // The app now requires our AppDependencies
+    val app: Routes[Endpoints.AppDependencies, Response] =
+      ZioHttpInterpreter(serverOptions).toHttp(Endpoints.all)
 
-    for {
-      config <- ZIO.service[AppConfig.Config] // Load config to get port
-      port = config.httpServer.port
+    val serverProgram =
+      for
+        config     <- ZIO.service[AppConfig]
+        actualPort <- Server.install(app)
+        _          <- Console.printLine(s"Go to http://localhost:${actualPort}/docs to open SwaggerUI. Press ENTER key to exit.")
+        _          <- Console.readLine
+      yield ()
+
+    // Fix: Wrap the entire program in () before .provide
+    serverProgram.provide(
+      // Configuration
+      AppConfig.live,
+      AppConfig.dbConfig, // Provide specific configs for layers that need them
+      AppConfig.httpConfig,
       
-      // Start the server
-      actualPort <- Server.install(app)
-      _ <- Console.printLine(s"Go to http://localhost:${actualPort}/docs to open SwaggerUI. Press ENTER key to exit.")
-      _ <- Console.readLine
-    } yield ()
-    .provide(
-      AppDependencies,
-      ZLayer.succeed(Server.Config.default.port(port)),
-      Server.live
+      // Infrastructure Layers
+      DoobieTransactor.live,
+      PostgresUserRepository.live,
+      PostgresEmailRepository.live,
+      GoogleSheetsClientLive.layer,
+      GoogleSmtpClientLive.layer,
+      JwtUtilityLive.layer,
+
+      // Service (Business Logic) Layers
+      UserServiceLive.layer,
+      EmailServiceLive.layer,
+
+      // ZIO HTTP Server
+      Server.live,
+      ZLayer.service[AppConfig].project(c => Server.Config.default.port(c.http.port))
     )
-    .exitCode

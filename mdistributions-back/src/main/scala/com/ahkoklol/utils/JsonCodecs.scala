@@ -1,49 +1,58 @@
 package com.ahkoklol.utils
 
-import com.ahkoklol.domain.models.User
-import com.ahkoklol.domain.models.User.{Login, Register, Update}
-import com.ahkoklol.domain.models.EmailDraft.Save
-import com.ahkoklol.domain.models.EmailDraft
 import com.ahkoklol.domain.errors.AppError
-import zio.json.{DeriveJsonDecoder, DeriveJsonEncoder, JsonDecoder, JsonEncoder}
+import com.ahkoklol.domain.models.*
+import com.ahkoklol.infra.utils.JwtClaim
+import zio.json.*
+
 import java.util.UUID
 
-// Define codecs for basic types needed by models
+// Centralized JSON codecs for domain models
 object JsonCodecs:
 
-  // Standard UUID codecs
-  given uuidEncoder: JsonEncoder[UUID] = JsonEncoder[String].contramap(_.toString)
-  given uuidDecoder: JsonDecoder[UUID] = JsonDecoder[String].map(UUID.fromString)
+  // AppError Codecs
+  case class ErrorResponse(error: String, message: String)
+  object ErrorResponse:
+    given encoder: JsonEncoder[ErrorResponse] = DeriveJsonEncoder.gen[ErrorResponse]
+    given decoder: JsonDecoder[ErrorResponse] = DeriveJsonDecoder.gen[ErrorResponse]
 
-  // --- User Codecs ---
+  given appErrorEncoder: JsonEncoder[AppError] = ErrorResponse.encoder.contramap {
+    case AppError.UserNotFound(msg)      => ErrorResponse("UserNotFound", msg)
+    case AppError.EmailDraftNotFound(msg) => ErrorResponse("EmailDraftNotFound", msg)
+    case AppError.Unauthorized(msg)      => ErrorResponse("Unauthorized", msg)
+    case AppError.EmailAlreadyExists(msg) => ErrorResponse("EmailAlreadyExists", msg)
+    case AppError.InvalidCredentials(msg) => ErrorResponse("InvalidCredentials", msg)
+    case AppError.DatabaseError(msg)     => ErrorResponse("DatabaseError", msg)
+    case AppError.UnknownError(msg)      => ErrorResponse("UnknownError", msg)
+  }
+  // We don't typically need a decoder for AppError
+
+  // UUID Codecs
+  given uuidEncoder: JsonEncoder[UUID] = JsonEncoder.string.contramap(_.toString)
+  given uuidDecoder: JsonDecoder[UUID] = JsonDecoder.string.map(UUID.fromString)
+
+  // User Model Codecs
+  given userRegisterEncoder: JsonEncoder[User.Register] = DeriveJsonEncoder.gen[User.Register]
+  given userRegisterDecoder: JsonDecoder[User.Register] = DeriveJsonDecoder.gen[User.Register]
+
+  given userLoginEncoder: JsonEncoder[User.Login] = DeriveJsonEncoder.gen[User.Login]
+  given userLoginDecoder: JsonDecoder[User.Login] = DeriveJsonDecoder.gen[User.Login]
+
+  given userUpdateEncoder: JsonEncoder[User.Update] = DeriveJsonEncoder.gen[User.Update]
+  given userUpdateDecoder: JsonDecoder[User.Update] = DeriveJsonDecoder.gen[User.Update]
 
   given userEncoder: JsonEncoder[User] = DeriveJsonEncoder.gen[User]
   given userDecoder: JsonDecoder[User] = DeriveJsonDecoder.gen[User]
 
-  given registerEncoder: JsonEncoder[Register] = DeriveJsonEncoder.gen[Register]
-  given registerDecoder: JsonDecoder[Register] = DeriveJsonDecoder.gen[Register]
-
-  given loginEncoder: JsonEncoder[Login] = DeriveJsonEncoder.gen[Login]
-  given loginDecoder: JsonDecoder[Login] = DeriveJsonDecoder.gen[Login]
-
-  given updateEncoder: JsonEncoder[Update] = DeriveJsonEncoder.gen[Update]
-  given updateDecoder: JsonDecoder[Update] = DeriveJsonDecoder.gen[Update]
-
-  // --- EmailDraft Codecs ---
+  // EmailDraft Model Codecs
+  given emailDraftSaveEncoder: JsonEncoder[EmailDraft.Save] = DeriveJsonEncoder.gen[EmailDraft.Save]
+  given emailDraftSaveDecoder: JsonDecoder[EmailDraft.Save] = DeriveJsonDecoder.gen[EmailDraft.Save]
 
   given emailDraftEncoder: JsonEncoder[EmailDraft] = DeriveJsonEncoder.gen[EmailDraft]
   given emailDraftDecoder: JsonDecoder[EmailDraft] = DeriveJsonDecoder.gen[EmailDraft]
 
-  given saveDraftEncoder: JsonEncoder[Save] = DeriveJsonEncoder.gen[Save]
-  given saveDraftDecoder: JsonDecoder[Save] = DeriveJsonDecoder.gen[Save]
-  
-  // --- Error Codecs (for Tapir error handling) ---
-  
-  final case class ErrorResponse(reason: String)
-  given errorResponseEncoder: JsonEncoder[ErrorResponse] = DeriveJsonEncoder.gen[ErrorResponse]
-  given errorResponseDecoder: JsonDecoder[ErrorResponse] = DeriveJsonDecoder.gen[ErrorResponse]
-  
-  // Custom codec to map AppError to a common HTTP response body
-  given appErrorEncoder: JsonEncoder[AppError] = ErrorResponse.encoder.contramap(err =>
-    ErrorResponse(s"${err.getClass.getSimpleName}: ${err.getMessage}")
-  )
+  // JWT Claim Codec
+  given jwtClaimEncoder: JsonEncoder[JwtClaim] = DeriveJsonEncoder.gen[JwtClaim]
+  given jwtClaimDecoder: JsonDecoder[JwtClaim] = DeriveJsonDecoder.gen[JwtClaim]
+
+end JsonCodecs

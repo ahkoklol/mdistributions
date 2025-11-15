@@ -1,33 +1,35 @@
 package com.ahkoklol
 
-import sttp.tapir.*
+import com.ahkoklol.domain.services.*
+import com.ahkoklol.infra.http.{EmailEndpoints, Security, UserEndpoints}
 import sttp.tapir.server.metrics.prometheus.PrometheusMetrics
 import sttp.tapir.swagger.bundle.SwaggerInterpreter
 import sttp.tapir.ztapir.ZServerEndpoint
-import com.ahkoklol.infrastructure.http.{EmailEndpoints, UserEndpoints}
-import com.ahkoklol.domain.services.{EmailService, UserService}
-import com.ahkoklol.infrastructure.utils.JwtUtility
-import com.ahkoklol.infrastructure.http.Security.SecurityDeps
-
 import zio.Task
-import zio.ZIO
-import zio.json.{DeriveJsonDecoder, DeriveJsonEncoder}
+import zio.RIO
 
 object Endpoints:
-  
-  // Define a type alias for the full set of dependencies required by all API endpoints
-  type ApiDependencies = UserService & EmailService & JwtUtility
+  // Define the total environment needed for all API endpoints
+  type AppDependencies = UserEndpoints.UserEndpointsEnv & EmailEndpoints.EmailEndpointsEnv
 
-  val apiEndpoints: List[ZServerEndpoint[ApiDependencies, Any]] = 
-    UserEndpoints.all.asInstanceOf[List[ZServerEndpoint[ApiDependencies, Any]]] ++ 
-    EmailEndpoints.all.asInstanceOf[List[ZServerEndpoint[ApiDependencies, Any]]]
+  // Combine API endpoints from all modules
+  val apiEndpoints: List[ZServerEndpoint[AppDependencies, Any]] =
+    UserEndpoints.all ++ EmailEndpoints.all
 
-  val docEndpoints: List[ZServerEndpoint[Any, Any]] = SwaggerInterpreter()
-    // The issue was here: casting to ZServerEndpoint[R, Any] simplifies the type signature required by SwaggerInterpreter
-    .fromServerEndpoints[Task](apiEndpoints.map(_.asInstanceOf[ZServerEndpoint[Any, Any]]), "mdistributions-back", "1.0.0")
+  // Create Swagger endpoints
+  val docEndpoints: List[ZServerEndpoint[Any, Any]] =
+    SwaggerInterpreter()
+      // Use .widen[Any] to satisfy Swagger's expectation of [Any, Task]
+      .fromServerEndpoints[Task](apiEndpoints.map(_.widen[Any]), "mdistributions-back", "1.0.0")
 
+  // Create Prometheus metrics endpoint
   val prometheusMetrics: PrometheusMetrics[Task] = PrometheusMetrics.default[Task]()
   val metricsEndpoint: ZServerEndpoint[Any, Any] = prometheusMetrics.metricsEndpoint
 
-  // All endpoints combined
-  val all: List[ZServerEndpoint[ApiDependencies, Any]] = apiEndpoints ++ docEndpoints.map(_.asInstanceOf[ZServerEndpoint[ApiDependencies, Any]]) ++ List(metricsEndpoint.asInstanceOf[ZServerEndpoint[ApiDependencies, Any]])
+  // Combine all endpoints (API + Docs + Metrics)
+  val all: List[ZServerEndpoint[AppDependencies, Any]] =
+    apiEndpoints ++
+    docEndpoints.map(_.widen[AppDependencies]) ++ // Widen doc/metric endpoints
+    List(metricsEndpoint.widen[AppDependencies])
+
+end Endpoints

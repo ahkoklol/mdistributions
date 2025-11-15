@@ -2,34 +2,27 @@ package com.ahkoklol.domain.models
 
 import java.util.UUID
 
-final case class User(
+// Final User model stored in DB and returned to client
+case class User(
     id: UUID,
     email: String,
-    passwordHash: String, // Storing password hash, not plaintext
-    // For connecting to Google APIs for sending emails and fetching sheets
-    googleSmtpCredential: Option[String], // e.g., a service account key or token
-    googleSheetsLink: Option[String]      // The user's main Google Sheet link to retrieve customers
+    googleSheetsLink: Option[String]
 )
 
 object User:
-  // --- DTOs for Common Operations ---
+  // Model for user registration
+  case class Register(
+      email: String,
+      password: String // Plain text, will be hashed in service layer
+  )
 
-  // Used for user registration
-  final case class Register(
+  // Model for user login
+  case class Login(
       email: String,
       password: String
   )
 
-  // Used for user login
-  final case class Login(
-      email: String,
-      password: String
-  )
-
-  // Used for updating user profile or settings
-  final case class Update(
-      newEmail: Option[String] = None,
-      newPassword: Option[String] = None,
-      newGoogleSmtpCredential: Option[String] = None,
-      newGoogleSheetsLink: Option[String] = None
+  // Model for updating user info
+  case class Update(
+      googleSheetsLink: Option[String]
   )
