@@ -23,7 +23,7 @@ object UserEndpoints:
 
   val registerServerEndpoint: ZServerEndpoint[UserEndpointsEnv, Any] =
     registerEndpoint.zServerLogic { registerData =>
-      ZIO.serviceWithZIO[UserService](_.register(registerData)).either
+      ZIO.serviceWithZIO[UserService](_.register(registerData))
     }
 
   // POST /users/login
@@ -34,7 +34,7 @@ object UserEndpoints:
 
   val loginServerEndpoint: ZServerEndpoint[UserEndpointsEnv, Any] =
     loginEndpoint.zServerLogic { loginData =>
-      ZIO.serviceWithZIO[UserService](_.login(loginData)).either
+      ZIO.serviceWithZIO[UserService](_.login(loginData))
     }
 
   // GET /user/me
