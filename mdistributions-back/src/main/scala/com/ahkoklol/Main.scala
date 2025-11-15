@@ -1,5 +1,10 @@
 package com.ahkoklol
 
+import com.ahkoklol.config.AppConfig
+import com.ahkoklol.infrastructure.db.{DoobieTransactor, PostgresEmailRepository, PostgresUserRepository}
+import com.ahkoklol.infrastructure.external.{GoogleSheetsClientLive, GoogleSmtpClientLive}
+import com.ahkoklol.infrastructure.utils.{BcryptHashUtility, JwtUtility}
+import com.ahkoklol.domain.services.{EmailService, UserService}
 import sttp.tapir.server.ziohttp.{ZioHttpInterpreter, ZioHttpServerOptions}
 import zio.{Console, LogLevel, Scope, ZIO, ZIOAppArgs, ZIOAppDefault, ZLayer}
 import zio.http.{Response, Routes, Server}
@@ -8,7 +13,31 @@ import zio.logging.backend.SLF4J
 
 object Main extends ZIOAppDefault:
 
-  override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] = SLF4J.slf4j(LogLevel.Debug, LogFormat.default)
+  // Layer composition for the entire application
+  private val InfrastructureLayer =
+    // 1. Utilities and Configuration
+    AppConfig.live >+> BcryptHashUtility.live >+> JwtUtility.live
+
+  private val DbLayer =
+    InfrastructureLayer >>> AppConfig.live.select(_.db) >>> DoobieTransactor.live
+
+  private val RepositoryLayer =
+    DbLayer >>> (PostgresUserRepository.live ++ PostgresEmailRepository.live)
+
+  private val ExternalClientLayer =
+    GoogleSheetsClientLive.live ++ GoogleSmtpClientLive.live
+
+  private val DomainServiceLayer =
+    (RepositoryLayer ++ InfrastructureLayer) >>> UserService.live ++
+    (RepositoryLayer ++ ExternalClientLayer) >>> EmailService.live
+
+  // The final layer providing all dependencies required by the endpoints
+  private val AppDependencies =
+    DomainServiceLayer ++ JwtUtility.live
+
+  // Overriding bootstrap to use configuration and SLF4J logging
+  override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] = 
+    SLF4J.slf4j(LogLevel.Debug, LogFormat.default)
 
   override def run: ZIO[Any with ZIOAppArgs with Scope, Any, Any] =
     val serverOptions: ZioHttpServerOptions[Any] =
@@ -16,17 +45,21 @@ object Main extends ZIOAppDefault:
         .metricsInterceptor(Endpoints.prometheusMetrics.metricsInterceptor())
         .options
 
-    val app: Routes[Any, Response] = ZioHttpInterpreter(serverOptions).toHttp(Endpoints.all)
+    // Create the ZIO HTTP app from all Tapir server endpoints
+    val app: Routes[Endpoints.ApiDependencies, Response] = ZioHttpInterpreter(serverOptions).toHttp(Endpoints.all)
 
-    val port = sys.env.get("HTTP_PORT").flatMap(_.toIntOption).getOrElse(8080)
-
-    (for
-      actualPort <- Server.install(app) // or .serve if you don't need the port and want to keep it running without manual readLine
+    for {
+      config <- ZIO.service[AppConfig.Config] // Load config to get port
+      port = config.httpServer.port
+      
+      // Start the server
+      actualPort <- Server.install(app)
       _ <- Console.printLine(s"Go to http://localhost:${actualPort}/docs to open SwaggerUI. Press ENTER key to exit.")
       _ <- Console.readLine
-    yield ())
-      .provide(
-        ZLayer.succeed(Server.Config.default.port(port)),
-        Server.live
-      )
-      .exitCode
+    } yield ()
+    .provide(
+      AppDependencies,
+      ZLayer.succeed(Server.Config.default.port(port)),
+      Server.live
+    )
+    .exitCode

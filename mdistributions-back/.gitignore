@@ -8,3 +8,6 @@
 target
 metals.sbt
 project/project
+
+# secret keys
+application.conf
