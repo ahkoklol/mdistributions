@@ -1,11 +1,15 @@
 import zio.*
+import zio.test.*
 import com.example.back.*
 import com.example.back.repositories.*
 import com.example.back.domain.*
 import java.time.ZonedDateTime
+import zio.test.ZIOSpecDefault
+import com.example.back.service.EmailServiceLive
+import com.example.back.service.EmailService
 
 class MockEmailRepository extends EmailRepository {
-  private var store = Map.empty[Long, EmailEntity]
+  private var store   = Map.empty[Long, EmailEntity]
   private var counter = 0L
 
   override def create(email: EmailEntity): Task[EmailEntity] = ZIO.succeed {
@@ -22,10 +26,9 @@ class MockEmailRepository extends EmailRepository {
     ZIO.succeed(store.values.toList.sortBy(_.creationDate)(Ordering[ZonedDateTime].reverse))
 }
 
-
 object EmailServiceSpec extends ZIOSpecDefault {
 
-  val mockRepo = new MockEmailRepository
+  val mockRepo          = new MockEmailRepository
   val emailServiceLayer = ZLayer.succeed(mockRepo) >>> EmailServiceLive.layer
 
   def spec = suite("EmailServiceLive")(
@@ -49,34 +52,31 @@ object EmailServiceSpec extends ZIOSpecDefault {
         assert(fetched.map(_.id))(isSome(equalTo(created.id)))
       }
     },
-
     test("get emails sorted by creation date descending") {
       val email1 = EmailEntity(0, 1, "A", "A", "link1", ZonedDateTime.now().minusDays(1))
       val email2 = EmailEntity(0, 2, "B", "B", "link2", ZonedDateTime.now())
 
       val program = for {
         service <- ZIO.service[EmailService]
-        _ <- service.create(email1)
-        _ <- service.create(email2)
-        emails <- service.getByCreationDateDesc()
+        _       <- service.create(email1)
+        _       <- service.create(email2)
+        emails  <- service.getByCreationDateDesc()
       } yield emails
 
       assertZIO(program.provideLayer(emailServiceLayer)) { emails =>
         assert(emails.map(_.subject))(equalTo(List("B", "A")))
       }
     },
-
     test("getById returns None for unknown ID") {
       val program = ZIO.serviceWithZIO[EmailService](_.getById(999))
       assertZIO(program.provideLayer(emailServiceLayer))(isNone)
     },
-
     test("create multiple emails increments IDs") {
       val email1 = EmailEntity(0, 1, "C", "C", "link3", ZonedDateTime.now())
       val email2 = EmailEntity(0, 1, "D", "D", "link4", ZonedDateTime.now())
 
       val program = for {
-        service <- ZIO.service[EmailService]
+        service  <- ZIO.service[EmailService]
         created1 <- service.create(email1)
         created2 <- service.create(email2)
       } yield (created1, created2)
@@ -85,10 +85,9 @@ object EmailServiceSpec extends ZIOSpecDefault {
         assert(e1.id)(not(equalTo(e2.id)))
       }
     },
-
     test("getByCreationDateDesc returns empty list when no emails") {
       val emptyRepo = new MockEmailRepository // fresh repo
-      val layer = ZLayer.succeed(emptyRepo) >>> EmailServiceLive.layer
+      val layer     = ZLayer.succeed(emptyRepo) >>> EmailServiceLive.layer
 
       val program = ZIO.serviceWithZIO[EmailService](_.getByCreationDateDesc())
       assertZIO(program.provideLayer(layer))(isEmpty)
