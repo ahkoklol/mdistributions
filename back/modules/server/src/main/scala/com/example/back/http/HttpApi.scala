@@ -14,13 +14,14 @@ object HttpApi extends Routes {
 
   private def makeControllers = for {
     healthController <- HealthController.makeZIO
-    personController <- PersonController.makeZIO
-  } yield List(healthController, personController)
+    emailController <- EmailController.makeZIO
+    userController  <- UserController.makeZIO
+  } yield List(healthController, emailController, userController)
 
-  def endpointsZIO: URIO[PersonService & JWTService, List[ServerEndpoint[Any, Task]]] =
+  def endpointsZIO: URIO[EmailService & UserService & JWTService, List[ServerEndpoint[Any, Task]]] =
     makeControllers.map(gatherRoutes(_.routes))
 
-  def streamEndpointsZIO: URIO[PersonService & JWTService, List[ServerEndpoint[ZioStreams, Task]]] =
+  def streamEndpointsZIO: URIO[EmailService & UserService & JWTService, List[ServerEndpoint[ZioStreams, Task]]] =
     makeControllers.map(gatherRoutes(_.streamRoutes))
 
   def endpoints = for {

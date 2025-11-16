@@ -8,7 +8,6 @@ import dev.cheleb.scalamigen.*
 import dev.cheleb.ziotapir.laminar.*
 
 import com.example.back.login.LoginPassword
-import com.example.back.http.endpoints.PersonEndpoint
 import com.example.back.domain.UserToken
 import com.example.back.domain.Password
 

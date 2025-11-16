@@ -28,12 +28,12 @@ class UserController private (userService: UserService, jwtService: JWTService)
     } yield token
     }
 
-  val profile: ServerEndpoint[Any, Task] = UserEndpoint.profile.zServerAuthenticatedLogic { userId =>
-    userService.getUserById(userId)
+  val profile: ServerEndpoint[Any, Task] = UserEndpoint.profile.zServerAuthenticatedLogic { userId: String =>
+    userService.getUserById(userId.toLong)
   }
 
-  val update: ServerEndpoint[Any, Task] = UserEndpoint.update.zServerAuthenticatedLogic { case (userId, op: UpdateUserOp) =>
-    userService.updateUser(userId, user => 
+  val update: ServerEndpoint[Any, Task] = UserEndpoint.update.zServerAuthenticatedLogic { case (userId: String, op: UpdateUserOp) =>
+    userService.updateUser(userId.toLong, user => 
         user.copy(
         name = op.name.getOrElse(user.name),
         googleSheetsLink = op.googleSheetsLink.orElse(user.googleSheetsLink)
@@ -41,8 +41,8 @@ class UserController private (userService: UserService, jwtService: JWTService)
     )
     }
 
-    val delete: ServerEndpoint[Any, Task] = UserEndpoint.delete.zServerAuthenticatedLogic { userId =>
-        userService.deleteUser(userId)
+    val delete: ServerEndpoint[Any, Task] = UserEndpoint.delete.zServerAuthenticatedLogic { userId: String =>
+        userService.deleteUser(userId.toLong)
     }
 
   override val routes: List[ServerEndpoint[Any, Task]] = List(register, login, profile, update, delete)

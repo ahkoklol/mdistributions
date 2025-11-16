@@ -11,14 +11,17 @@ import com.example.back.domain.*
 import com.example.back.http.endpoints.EmailEndpoint
 import com.example.back.service.EmailService
 import com.example.back.service.JWTService
+import com.example.back.EmailEntity
+import java.time.ZonedDateTime
+import io.scalaland.chimney.dsl.*
 
 class EmailController private (emailService: EmailService, jwtService: JWTService)
     extends SecuredBaseController[String, UserID](jwtService.verifyToken) {
 
-  val createEmail: ServerEndpoint[Any, Task] = EmailEndpoint.createEmail.zServerAuthenticatedLogic { case (userId, emailDto) =>
+  val createEmail: ServerEndpoint[Any, Task] = EmailEndpoint.createEmail.zServerAuthenticatedLogic { case (userId: String, emailDto: Email) =>
     val emailEntity = EmailEntity(
-        id = 0, // or None if using auto-generated id
-        userId = userId,
+        id = 0,
+        userId = userId.toLong,
         subject = emailDto.subject,
         body = emailDto.body,
         googleSheetsLink = emailDto.googleSheetsLink,
@@ -27,12 +30,14 @@ class EmailController private (emailService: EmailService, jwtService: JWTServic
     emailService.create(emailEntity).map(_.into[Email].transform)
     }
 
-  val getEmailById: ServerEndpoint[Any, Task] = EmailEndpoint.getEmailById.zServerAuthenticatedLogic { case (userId, emailId) =>
+  val getEmailById: ServerEndpoint[Any, Task] = EmailEndpoint.getEmailById.zServerAuthenticatedLogic { case (userId: UserID, emailId: Long) =>
     emailService.getById(emailId).map(_.map(_.into[Email].transform))
   }
 
-  val getEmails: ServerEndpoint[Any, Task] = EmailEndpoint.getEmails.zServerAuthenticatedLogic { userId =>
-    emailService.getByCreationDateDesc().map(_.filter(_.userId == userId).map(_.into[Email].transform))
+  val getEmails: ServerEndpoint[Any, Task] = EmailEndpoint.getEmails.zServerAuthenticatedLogic { userId: UserID =>
+    emailService
+      .getByCreationDateDesc()
+      .map(_.filter(_.userId == user.id).map(_.into[Email].transform))
   }
 
   override val routes: List[ServerEndpoint[Any, Task]] = List(createEmail, getEmailById, getEmails)
