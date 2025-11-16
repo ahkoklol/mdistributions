@@ -5,7 +5,6 @@ import dev.cheleb.ziotapir.SecuredBaseController
 import zio.*
 
 import sttp.tapir.server.ServerEndpoint
-import sttp.tapir.ztapir.*
 
 import com.example.back.domain.*
 import com.example.back.http.endpoints.EmailEndpoint
@@ -19,8 +18,7 @@ class EmailController private (emailService: EmailService, jwtService: JWTServic
     extends SecuredBaseController[String, UserID](jwtService.verifyToken) {
 
   val createEmail: ServerEndpoint[Any, Task] =
-    EmailEndpoint.createEmail.zServerAuthenticatedLogic { (user: UserID, emailDto: Email) =>
-      val trace = summon[zio.Trace]
+    EmailEndpoint.createEmail.zServerAuthenticatedLogic { (user: UserID) => (emailDto: Email) =>
       val emailEntity = EmailEntity(
         id = 0,
         userId = user.id,
@@ -33,15 +31,14 @@ class EmailController private (emailService: EmailService, jwtService: JWTServic
     }
 
   val getEmailById: ServerEndpoint[Any, Task] =
-    EmailEndpoint.getEmailById.zServerAuthenticatedLogic { (user: UserID, emailId: Long) =>
-      val trace = summon[zio.Trace]
+    EmailEndpoint.getEmailById.zServerAuthenticatedLogic { (_: UserID) => (emailId: Long) =>
       emailService.getById(emailId).map(_.map(_.into[Email].transform))
     }
 
   val getEmails: ServerEndpoint[Any, Task] =
-    EmailEndpoint.getEmails.zServerAuthenticatedLogic { (user: UserID) =>
-      val trace = summon[zio.Trace]
-      emailService.getByCreationDateDesc()
+    EmailEndpoint.getEmails.zServerAuthenticatedLogic { (user: UserID) => _ =>
+      emailService
+        .getByCreationDateDesc()
         .map(_.filter(_.userId == user.id).map(_.into[Email].transform))
     }
 
