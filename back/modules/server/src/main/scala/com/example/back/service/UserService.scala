@@ -72,15 +72,15 @@ class UserServiceLive private (
       .mapInto[User]
 
 override def findByEmail(email: String): Task[Option[User]] =
-    userRepository
-    .findByEmail(email)
-    .mapOptInto[User]
+  userRepository
+    .findByEmail(email)          // Task[Option[UserEntity]]
+    .map(_.map(_.into[User].transform))  // map Option inside Task
 
 override def updateUser(id: Long, op: User => User): Task[User] =
-    userRepository
+  userRepository
     .update(
-        id,
-        userEntity => op(userEntity.into[User].transform).intoPartial[UserEntity].transform
+      id,
+      userEntity => op(userEntity.into[User].transform).into[UserEntity].transform
     )
     .mapInto[User]
 
