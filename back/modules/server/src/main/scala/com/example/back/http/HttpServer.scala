@@ -62,12 +62,13 @@ object HttpServer extends ZIOAppDefault {
       .provide(
         Server.default,
         // Service layers
-        PersonServiceLive.layer,
+        UserServiceLive.layer,
+        EmailServiceLive.layer,
         FlywayServiceLive.configuredLayer,
         JWTServiceLive.configuredLayer,
         // Repository layers
         UserRepositoryLive.layer,
-        PetRepositoryLive.layer,
+        EmailRepositoryLive.layer,
         Repository.dataLayer
         // ,ZLayer.Debug.mermaid
       )

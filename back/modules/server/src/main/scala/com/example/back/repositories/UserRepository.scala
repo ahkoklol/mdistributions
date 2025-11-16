@@ -4,7 +4,6 @@ import zio.*
 
 import com.example.back.UserEntity
 import com.example.back.NewUserEntity
-import com.example.back.domain.PetType
 
 import io.getquill.*
 import io.getquill.jdbczio.*
@@ -28,17 +27,14 @@ class UserRepositoryLive private (quill: Quill.Postgres[SnakeCase]) extends User
   inline given SchemaMeta[UserEntity]    = schemaMeta[UserEntity]("users")
   inline given UpdateMeta[UserEntity]    = updateMeta[UserEntity](_.id, _.creationDate)
 
-  inline given MappedEncoding[PetType, String] =
-    MappedEncoding[PetType, String](_.toString)
-  inline given MappedEncoding[String, PetType] =
-    MappedEncoding[String, PetType](PetType.valueOf)
-
   override def create(user: NewUserEntity): Task[UserEntity] =
     run(query[NewUserEntity].insertValue(lift(user)).returning(r => r))
       .map(r => r.intoPartial[UserEntity].transform.asOption)
       .someOrFail(new RuntimeException(""))
+
   override def getById(id: Long): Task[Option[UserEntity]] =
     run(query[UserEntity].filter(_.id == lift(id))).map(_.headOption)
+
   override def findByEmail(email: String): Task[Option[UserEntity]] =
     run(query[UserEntity].filter(_.email == lift(email))).map(_.headOption)
 

@@ -8,10 +8,8 @@ case class User(
   id: Long,
   name: String,
   email: String,
-  petId: Option[Long],
-  petType: Option[PetType],
+  googleSheetsLink: Option[String],
   hashedPassword: String,
-  age: Int,
   creationDate: ZonedDateTime
 ) derives JsonCodec,
       Schema
