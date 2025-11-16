@@ -7,13 +7,7 @@ import dev.cheleb.ziotapir.laminar.*
 
 import com.example.back.domain.*
 
-given Defaultable[Cat] with
-  def default = Cat("")
-
-given Defaultable[Dog] with
-  def default = Dog("", 1)
-
-given Form[Password] = secretForm(Password(_))
+given Form[secrets.Password] = secretForm(secrets.Password(_))
 
 given f: WidgetFactory = UI5WidgetFactory
 

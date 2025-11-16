@@ -14,12 +14,18 @@ import scala.concurrent.duration.DurationInt
 
 import com.example.back.app.given
 import com.example.back.domain.*
-import com.example.back.http.endpoints.PersonEndpoint
+import com.example.back.http.endpoints.UserEndpoint
 
 object SignupPage:
   def apply() =
     val personVar = Var(
-      Person("John", "john.does@foo.bar", Password("notsecured"), Password("notsecured"), 42, Left(Cat("Fluffy")))
+      RegisterUser(
+        "John",
+        "john.does@foo.bar",
+        secrets.Password("notsecured"),
+        secrets.Password("notsecured"),
+        None
+      )
     )
     val userBus  = EventBus[User]()
     val errorBus = EventBus[Throwable]()
@@ -47,8 +53,8 @@ object SignupPage:
           onClick --> { _ =>
             // scalafmt:off
 
-            PersonEndpoint
-              .create(personVar.now())
+            UserEndpoint
+              .register(personVar.now())
               .emitTo(userBus, errorBus)
 
             // scalafmt:on
@@ -64,11 +70,10 @@ object SignupPage:
       h2("User"),
       div(s"Id: ${user.id}"),
       div(s"Name: ${user.name}"),
-      div(s"Age: ${user.age}"),
       div(s"Creation Date: ${user.creationDate}")
     )
 
-  def debugUI(debugVar: Var[Boolean], personVar: Var[Person]) =
+  def debugUI(debugVar: Var[Boolean], personVar: Var[RegisterUser]) =
     div(
       styleAttr := "float: right;",
       Switch(

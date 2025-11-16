@@ -9,10 +9,11 @@ import dev.cheleb.ziotapir.laminar.*
 
 import com.example.back.login.LoginPassword
 import com.example.back.domain.UserToken
-import com.example.back.domain.Password
 
 import scala.concurrent.duration.DurationInt
+import com.example.back.http.endpoints.UserEndpoint
 
+import com.example.back.domain.secrets
 object Header:
   private val openPopoverBus = new EventBus[Boolean]
   private val profileId      = "profileId"
@@ -20,9 +21,9 @@ object Header:
   private val loginErrorEventBus   = new EventBus[Throwable]
   private val loginSuccessEventBus = new EventBus[Unit]
 
-  val credentials = Var(LoginPassword("", Password("")))
+  val credentials = Var(LoginPassword("", secrets.Password("")))
 
-  given Form[Password] = secretForm(Password(_))
+  given Form[secrets.Password] = secretForm(secrets.Password(_))
 
   def apply(): HtmlElement =
     div(
@@ -79,7 +80,7 @@ object Header:
     UList(
       _.separators := ListSeparator.None,
       _.item(
-        _.icon             := IconName.settings,
+        _.icon := IconName.settings,
         a("Settings", href := Router.uiRoute("profile"), title := s" Logged in as ${userToken.email}")
       )
         .amend(
@@ -94,7 +95,7 @@ object Header:
     )
 
   def loginHandler(session: Session[UserToken]): Observer[Any] = Observer[Any] { _ =>
-    PersonEndpoint
+    UserEndpoint
       .login(credentials.now())
       .map(token => session.saveToken(token))
       .emitTo(loginSuccessEventBus, loginErrorEventBus)
