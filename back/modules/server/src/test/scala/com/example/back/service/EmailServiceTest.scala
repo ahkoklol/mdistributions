@@ -5,16 +5,14 @@ import java.time.ZonedDateTime
 import com.example.back.*
 import com.example.back.service.*
 import com.example.back.repositories.*
-import io.getquill.jdbczio.Quill
+import io.getquill.SnakeCase
 
 object EmailServiceSpec extends ZIOSpecDefault {
 
   val mockRepoLayer = ZLayer.succeed(new MockEmailRepository)
 
-  val dummyQuillLayer: ZLayer[Any, Nothing, Quill.Postgres[io.getquill.SnakeCase]] =
-    ZLayer.succeed(null.asInstanceOf[Quill.Postgres[io.getquill.SnakeCase]])
-
-  val testLayer = mockRepoLayer ++ dummyQuillLayer >>> EmailServiceLive.layer
+  // Use your Postgres testcontainer layer
+  val testLayer = mockRepoLayer ++ PostgresTestcontainer.live >>> EmailServiceLive.layer
 
   def spec = suite("EmailService")(
     test("create and fetch email") {

@@ -4,17 +4,16 @@ import zio.*
 import io.github.scottweaver.zio.testcontainers.postgres.ZPostgreSQLContainer
 import io.getquill.jdbczio.Quill
 import io.getquill.SnakeCase
-import javax.sql.DataSource
 
 object PostgresTestcontainer {
 
-  val live: ZLayer[Any, Throwable, Quill.PostgresLite[SnakeCase]] =
+  val live: ZLayer[Any, Throwable, Quill.Postgres[SnakeCase]] =
     ZPostgreSQLContainer.Settings.default >>>
-      ZPostgreSQLContainer.live >>>
-      dataSourceToQuill
-
-  private val dataSourceToQuill: ZLayer[DataSource, Throwable, Quill.PostgresLite[SnakeCase]] =
-    ZLayer.scoped {
-      ZIO.service[DataSource].map(ds => Quill.Postgres(SnakeCase, ds))
-    }
+      ZPostgreSQLContainer.live >>>   // provides ZPostgreSQLContainer
+      ZLayer.fromZIO {
+        // access the DataSource directly from the container
+        ZIO.service[ZPostgreSQLContainer].map(container =>
+          Quill.Postgres(SnakeCase, container.dataSource)
+        )
+      }
 }
