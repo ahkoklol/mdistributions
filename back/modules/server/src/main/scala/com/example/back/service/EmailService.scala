@@ -2,16 +2,9 @@ package com.example.back.service
 
 import zio.*
 
-import io.scalaland.chimney.dsl._
-import java.time.ZonedDateTime
-
-import com.example.back.domain.*
-import com.example.back.domain.errors.*
 import com.example.back.repositories.EmailRepository
 import com.example.back.EmailEntity
 import com.example.back.repositories.TransactionSupport
-
-import java.sql.SQLException
 
 import io.getquill.jdbczio.Quill
 import io.getquill.SnakeCase
